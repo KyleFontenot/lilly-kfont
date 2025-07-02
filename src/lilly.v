@@ -134,6 +134,8 @@ fn (mut lilly Lilly) open_file_at(path string, pos ?ui.CursorPos) ! {
 	return lilly.open_file_with_reader_at(path, pos, lilly.line_reader or { os.read_lines })
 }
 
+// TODO(tauraamui) [24/06/2025]: re-architect how the buffers/document contents themselves are managed
+//                  and passed into their respective views/buffer views
 fn (mut lilly Lilly) open_file_with_reader_at(path string, pos ?ui.CursorPos, line_reader fn (path string) ![]string) ! {
 	if mut existing_file_buff := lilly.file_buffers[path] {
 		if existing_view := lilly.buffer_views[existing_file_buff.uuid] {
@@ -154,7 +156,7 @@ fn (mut lilly Lilly) open_file_with_reader_at(path string, pos ?ui.CursorPos, li
 		return
 	}
 
-	mut buff := buffer.Buffer.new(path, lilly.use_gap_buffer)
+	mut buff := buffer.Buffer.new(path, if lilly.use_gap_buffer { .gap_buffer } else { .legacy })
 	buff.read_lines(line_reader) or { return err }
 
 	lilly.file_buffers[path] = buff
@@ -296,7 +298,7 @@ fn (mut lilly Lilly) resolve_todo_comments_matches() []buffer.Match {
 	for file_path in unopened_file_paths {
 		if is_binary(file_path) { continue }
 		threads << go fn (line_reader fn (path string) ![]string, use_gap_buffer bool, file_path string, match_ch chan buffer.Match) {
-			mut buff := buffer.Buffer.new(file_path, use_gap_buffer)
+			mut buff := buffer.Buffer.new(file_path, if use_gap_buffer{ .gap_buffer } else { .legacy })
 			buff.read_lines(line_reader) or { return }
 			resolve_matches_within_buffer(buff, match_ch)
 		}(line_reader, lilly.use_gap_buffer, file_path, match_ch)
